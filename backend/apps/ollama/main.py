@@ -29,8 +29,22 @@ from typing import Optional, List, Union
 
 
 from apps.web.models.users import Users
+from apps.ollama.load_balancer import (
+    LoadBalancer,
+    RoundRobinPolicy,
+    WeightedRoundRobinPolicy,
+)
 from constants import ERROR_MESSAGES
 from utils.utils import decode_token, get_current_user, get_admin_user
+
+from utils.misc import calculate_sha256
+from config import (
+    OLLAMA_BASE_URLS,
+    MODEL_FILTER_ENABLED,
+    MODEL_FILTER_LIST,
+    OLLAMA_LB_WEIGHTS,
+    OLLAMA_LB_POLICY,
+)
 
 
 from config import (
@@ -59,8 +73,10 @@ app.state.MODEL_FILTER_ENABLED = MODEL_FILTER_ENABLED
 app.state.MODEL_FILTER_LIST = MODEL_FILTER_LIST
 
 app.state.OLLAMA_BASE_URLS = OLLAMA_BASE_URLS
+app.state.OLLAMA_LB = LoadBalancer()
+app.state.OLLAMA_LB_POLICY = "round-robin"
+app.state.OLLAMA_LB_WEIGHTS = OLLAMA_LB_WEIGHTS
 app.state.MODELS = {}
-
 
 REQUEST_POOL = []
 
@@ -68,6 +84,22 @@ REQUEST_POOL = []
 # TODO: Implement a more intelligent load balancing mechanism for distributing requests among multiple backend instances.
 # Current implementation uses a simple round-robin approach (random.choice). Consider incorporating algorithms like weighted round-robin,
 # least connections, or least response time for better resource utilization and performance optimization.
+
+
+def get_ollama_load_balanced_url(model_name: str):
+    if app.state.OLLAMA_LB.models_map is None:
+        if OLLAMA_LB_POLICY == "weighted-round-robin":
+            lb_policy = WeightedRoundRobinPolicy()
+            lb_policy.set_weights(app.state.OLLAMA_LB_WEIGHTS)
+        else:  # Fallback to "round-robin"
+            lb_policy = RoundRobinPolicy()
+        lb = LoadBalancer(lb_policy)
+        lb.set_model_map(app.state.MODELS)
+        app.state.OLLAMA_LB = lb
+
+    url_idx = app.state.OLLAMA_LB.get_server_idx_for_model(model_name)
+    # print(url_idx)
+    return url_idx
 
 
 @app.middleware("http")
@@ -102,6 +134,30 @@ async def update_ollama_api_url(form_data: UrlUpdateForm, user=Depends(get_admin
 
     log.info(f"app.state.OLLAMA_BASE_URLS: {app.state.OLLAMA_BASE_URLS}")
     return {"OLLAMA_BASE_URLS": app.state.OLLAMA_BASE_URLS}
+
+
+@app.get("/lb")
+async def get_ollama_load_balancer(user=Depends(get_admin_user)):
+    return {
+        "OLLAMA_LB_POLICY": app.state.OLLAMA_LB_POLICY,
+        "OLLAMA_LB_WEIGHTS": app.state.OLLAMA_LB_WEIGHTS,
+    }
+
+
+class LoadBalancerConfig(BaseModel):
+    policy: str
+    weights: Optional[List[int]]
+
+
+@app.post("/lb/update")
+async def update_ollama_load_balancer(
+    form_data: LoadBalancerConfig, user=Depends(get_admin_user)
+):
+    app.state.OLLAMA_LB_POLICY = form_data.policy
+    app.state.OLLAMA_LB_WEIGHTS = form_data.weights
+
+    print(app.state.OLLAMA_LB_POLICY)
+    return {"OLLAMA_LB_POLICY": app.state.OLLAMA_LB_POLICY}
 
 
 @app.get("/cancel/{request_id}")
@@ -205,9 +261,7 @@ async def get_ollama_tags(
 @app.get("/api/version")
 @app.get("/api/version/{url_idx}")
 async def get_ollama_versions(url_idx: Optional[int] = None):
-
     if url_idx == None:
-
         # returns lowest version
         tasks = [fetch_url(f"{url}/api/version") for url in app.state.OLLAMA_BASE_URLS]
         responses = await asyncio.gather(*tasks)
@@ -567,7 +621,8 @@ async def show_model_info(form_data: ModelNameForm, user=Depends(get_current_use
             detail=ERROR_MESSAGES.MODEL_NOT_FOUND(form_data.name),
         )
 
-    url_idx = random.choice(app.state.MODELS[form_data.name]["urls"])
+    print(f"form_data: {form_data.name}")
+    url_idx = get_ollama_load_balanced_url(form_data.name)
     url = app.state.OLLAMA_BASE_URLS[url_idx]
     log.info(f"url: {url}")
 
@@ -613,7 +668,7 @@ async def generate_embeddings(
 ):
     if url_idx == None:
         if form_data.model in app.state.MODELS:
-            url_idx = random.choice(app.state.MODELS[form_data.model]["urls"])
+            url_idx = get_ollama_load_balanced_url(form_data.model)
         else:
             raise HTTPException(
                 status_code=400,
@@ -670,10 +725,9 @@ async def generate_completion(
     url_idx: Optional[int] = None,
     user=Depends(get_current_user),
 ):
-
     if url_idx == None:
         if form_data.model in app.state.MODELS:
-            url_idx = random.choice(app.state.MODELS[form_data.model]["urls"])
+            url_idx = get_ollama_load_balanced_url(form_data.model)
         else:
             raise HTTPException(
                 status_code=400,
@@ -768,10 +822,9 @@ async def generate_chat_completion(
     url_idx: Optional[int] = None,
     user=Depends(get_current_user),
 ):
-
     if url_idx == None:
         if form_data.model in app.state.MODELS:
-            url_idx = random.choice(app.state.MODELS[form_data.model]["urls"])
+            url_idx = get_ollama_load_balanced_url(form_data.model)
         else:
             raise HTTPException(
                 status_code=400,
@@ -872,10 +925,9 @@ async def generate_openai_chat_completion(
     url_idx: Optional[int] = None,
     user=Depends(get_current_user),
 ):
-
     if url_idx == None:
         if form_data.model in app.state.MODELS:
-            url_idx = random.choice(app.state.MODELS[form_data.model]["urls"])
+            url_idx = get_ollama_load_balanced_url(form_data.model)
         else:
             raise HTTPException(
                 status_code=400,
