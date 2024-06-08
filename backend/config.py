@@ -416,6 +416,9 @@ OLLAMA_API_BASE_URL = os.environ.get(
 )
 
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "")
+OLLAMA_AUTH_KEY = os.environ.get("OLLAMA_AUTH_KEY", "")
+OLLAMA_AUTH_KEY = OLLAMA_AUTH_KEY if OLLAMA_AUTH_KEY else ""
+
 K8S_FLAG = os.environ.get("K8S_FLAG", "")
 USE_OLLAMA_DOCKER = os.environ.get("USE_OLLAMA_DOCKER", "false")
 
@@ -445,6 +448,15 @@ OLLAMA_BASE_URLS = [url.strip() for url in OLLAMA_BASE_URLS.split(";")]
 OLLAMA_BASE_URLS = PersistentConfig(
     "OLLAMA_BASE_URLS", "ollama.base_urls", OLLAMA_BASE_URLS
 )
+
+OLLAMA_AUTH_KEYS = os.environ.get("OLLAMA_AUTH_KEYS", "")
+OLLAMA_AUTH_KEYS = OLLAMA_AUTH_KEYS if OLLAMA_AUTH_KEYS != "" else OLLAMA_AUTH_KEY
+
+OLLAMA_AUTH_KEYS = [url.strip() for url in OLLAMA_AUTH_KEYS.split(";")]
+OLLAMA_AUTH_KEYS = PersistentConfig(
+    "OLLAMA_AUTH_KEYS", "ollama.auth_keys", OLLAMA_AUTH_KEYS
+)
+
 
 ####################################
 # OPENAI_API

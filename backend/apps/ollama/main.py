@@ -47,6 +47,7 @@ from utils.models import get_model_id_from_custom_model_id
 from config import (
     SRC_LOG_LEVELS,
     OLLAMA_BASE_URLS,
+    OLLAMA_AUTH_KEYS,
     ENABLE_OLLAMA_API,
     ENABLE_MODEL_FILTER,
     MODEL_FILTER_LIST,
@@ -74,6 +75,7 @@ app.state.config.MODEL_FILTER_LIST = MODEL_FILTER_LIST
 
 app.state.config.ENABLE_OLLAMA_API = ENABLE_OLLAMA_API
 app.state.config.OLLAMA_BASE_URLS = OLLAMA_BASE_URLS
+app.state.config.OLLAMA_AUTH_KEYS = OLLAMA_AUTH_KEYS
 app.state.MODELS = {}
 
 
@@ -131,10 +133,47 @@ async def update_ollama_api_url(form_data: UrlUpdateForm, user=Depends(get_admin
     return {"OLLAMA_BASE_URLS": app.state.config.OLLAMA_BASE_URLS}
 
 
+@app.get("/auth_keys")
+async def get_ollama_api_auth_keys(user=Depends(get_admin_user)):
+    return {"OLLAMA_AUTH_KEYS": app.state.config.OLLAMA_AUTH_KEYS}
+
+
+class AuthKeyUpdateForm(BaseModel):
+    auth_keys: List[str]
+
+
+@app.post("/auth_keys/update")
+async def update_ollama_api_auth_keys(form_data: AuthKeyUpdateForm, user=Depends(get_admin_user)):
+    app.state.config.OLLAMA_AUTH_KEYS = form_data.auth_keys
+
+    log.info(f"app.state.config.OLLAMA_AUTH_KEYS: {app.state.config.OLLAMA_AUTH_KEYS}")
+    return {"OLLAMA_AUTH_KEYS": app.state.config.OLLAMA_AUTH_KEYS}
+
+
+def build_headers(url):
+    try:
+        token = None
+
+        for i in range(len(app.state.config.OLLAMA_BASE_URLS)):
+            if len(app.state.config.OLLAMA_AUTH_KEYS) <= i:
+                break
+
+            if app.state.config.OLLAMA_BASE_URLS[i] in url:
+                token = app.state.config.OLLAMA_AUTH_KEYS[i]
+                break
+
+        if token:
+            return {"Authorization": f"Bearer {token}"}
+        else:
+            return {}
+    except IndexError:
+        return {}
+
+
 async def fetch_url(url):
     timeout = aiohttp.ClientTimeout(total=5)
     try:
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+        async with aiohttp.ClientSession(headers=build_headers(url=url), timeout=timeout, trust_env=True) as session:
             async with session.get(url) as response:
                 return await response.json()
     except Exception as e:
@@ -156,14 +195,14 @@ async def cleanup_response(
 async def post_streaming_url(url: str, payload: str):
     r = None
     try:
-        session = aiohttp.ClientSession(trust_env=True)
+        session = aiohttp.ClientSession(headers=build_headers(url=url), trust_env=True)
         r = await session.post(url, data=payload)
         r.raise_for_status()
 
         return StreamingResponse(
             r.content,
             status_code=r.status,
-            headers=dict(r.headers),
+            headers={k: v for k, v in dict(r.headers).items() if k in ['Content-Type', 'Date', 'Transfer-Encoding']},
             background=BackgroundTask(cleanup_response, response=r, session=session),
         )
     except Exception as e:
@@ -213,7 +252,7 @@ async def get_all_models():
         models = {
             "models": merge_models_lists(
                 map(
-                    lambda response: response["models"] if response else None, responses
+                    lambda response: response["models"] if response and 'models' in response else None, responses
                 )
             )
         }
@@ -250,7 +289,7 @@ async def get_ollama_tags(
 
         r = None
         try:
-            r = requests.request(method="GET", url=f"{url}/api/tags")
+            r = requests.request(method="GET", headers=build_headers(url=url), url=f"{url}/api/tags")
             r.raise_for_status()
 
             return r.json()
@@ -283,7 +322,7 @@ async def get_ollama_versions(url_idx: Optional[int] = None):
                 for url in app.state.config.OLLAMA_BASE_URLS
             ]
             responses = await asyncio.gather(*tasks)
-            responses = list(filter(lambda x: x is not None, responses))
+            responses = list(filter(lambda x: x is not None and 'version' in x, responses))
 
             if len(responses) > 0:
                 lowest_version = min(
@@ -304,7 +343,7 @@ async def get_ollama_versions(url_idx: Optional[int] = None):
 
             r = None
             try:
-                r = requests.request(method="GET", url=f"{url}/api/version")
+                r = requests.request(method="GET", headers=build_headers(url=url), url=f"{url}/api/version")
                 r.raise_for_status()
 
                 return r.json()
@@ -425,6 +464,7 @@ async def copy_model(
     try:
         r = requests.request(
             method="POST",
+            headers=build_headers(url=url),
             url=f"{url}/api/copy",
             data=form_data.model_dump_json(exclude_none=True).encode(),
         )
@@ -472,6 +512,7 @@ async def delete_model(
     try:
         r = requests.request(
             method="DELETE",
+            headers=build_headers(url=url),
             url=f"{url}/api/delete",
             data=form_data.model_dump_json(exclude_none=True).encode(),
         )
@@ -512,6 +553,7 @@ async def show_model_info(form_data: ModelNameForm, user=Depends(get_verified_us
     try:
         r = requests.request(
             method="POST",
+            headers=build_headers(url=url),
             url=f"{url}/api/show",
             data=form_data.model_dump_json(exclude_none=True).encode(),
         )
@@ -569,6 +611,7 @@ async def generate_embeddings(
     try:
         r = requests.request(
             method="POST",
+            headers=build_headers(url=url),
             url=f"{url}/api/embeddings",
             data=form_data.model_dump_json(exclude_none=True).encode(),
         )
@@ -619,6 +662,7 @@ def generate_ollama_embeddings(
     try:
         r = requests.request(
             method="POST",
+            headers=build_headers(url=url),
             url=f"{url}/api/embeddings",
             data=form_data.model_dump_json(exclude_none=True).encode(),
         )
@@ -974,7 +1018,7 @@ async def get_openai_models(
     else:
         url = app.state.config.OLLAMA_BASE_URLS[url_idx]
         try:
-            r = requests.request(method="GET", url=f"{url}/api/tags")
+            r = requests.request(method="GET", headers=build_headers(url=url), url=f"{url}/api/tags")
             r.raise_for_status()
 
             models = r.json()
