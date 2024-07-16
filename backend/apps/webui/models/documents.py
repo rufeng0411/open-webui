@@ -112,6 +112,15 @@ class DocumentsTable:
                 DocumentModel.model_validate(doc) for doc in db.query(Document).all()
             ]
 
+    def get_docs_by_tag(self, tag: str) -> List[DocumentModel]:
+        with get_db() as db:
+            return [
+                DocumentModel.model_validate(doc)
+                for doc in db.query(Document)
+                .filter(Document.content.contains(tag))
+                .all()
+            ]
+
     def update_doc_by_name(
         self, name: str, form_data: DocumentUpdateForm
     ) -> Optional[DocumentModel]:
