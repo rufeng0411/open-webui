@@ -230,3 +230,59 @@ export const deleteDocByName = async (token: string, name: string) => {
 
 	return res;
 };
+
+// Function to toggle between the Self-Aware Document Monitoring enable and disable states
+export async function sadmStateToggler(token: string, status: boolean) {
+    const SADM_API_ENDPOINTS = status
+        ? `${WEBUI_API_BASE_URL}/sadm/enable`
+        : `${WEBUI_API_BASE_URL}/sadm/disable`;
+
+    try {
+        const response = await fetch(SADM_API_ENDPOINTS, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+
+        // Check if response is not okay
+        if (!response.ok) {
+            const errorDetails = await response.json();
+            throw new Error(`HTTP error ${response.status}: ${errorDetails}`);
+        }
+
+        // Handle successful response
+        const data = await response.json();
+        console.log('SADM toggling response:', data);
+
+    } catch (error) {
+        console.error('Error toggling between SADM states:', error);
+        throw error;
+    }
+}
+
+// Function to fetch the current status of the Self-Aware Document Monitoring
+export async function sadmRetrieveStatus(token: string): Promise<string> {
+    const STATUS_API_URL = `${WEBUI_API_BASE_URL}/sadm/status`;
+    try {
+        const response = await fetch(STATUS_API_URL, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+            },
+        });
+
+		if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}: ${await response.text()}`);
+        }
+
+        const data = await response.json();
+        console.log(`SADM Status Retrieved Successfully: Status = "${data.status}"`, response.status);
+        return data.status;
+    } catch (error) {
+        console.error('Error fetching SADM status:', error);
+        throw error;
+    }
+}

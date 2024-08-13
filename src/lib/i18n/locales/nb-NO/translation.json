@@ -715,5 +715,10 @@
 	"Your account status is currently pending activation.": "Din konto venter for øyeblikket på aktivering.",
 	"Your entire contribution will go directly to the plugin developer; Open WebUI does not take any percentage. However, the chosen funding platform might have its own fees.": "Hele beløpet du gir går uavkortet til utvikleren av tillegget; Open WebUI tar ikke noe av dette. Den valgte finansieringsplattformen kan derimot ha egne gebyrer.",
 	"Youtube": "Youtube",
-	"Youtube Loader Settings": "Innstillinger for YouTube-laster"
+	"Youtube Loader Settings": "Innstillinger for YouTube-laster",
+	"Self-Aware Document Monitoring": "",
+  "Self-Aware Document Monitoring has been enabled and is now Active": "",
+  "Self-Aware Document Monitoring has been disabled and is now inactive": "",
+  "Failed to fetch Self-Aware Document Monitoring status": "",
+  "Failed to update Self-Aware Document Monitoring": ""
 }
