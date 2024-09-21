@@ -64,6 +64,7 @@
 	import Navbar from '$lib/components/layout/Navbar.svelte';
 	import ChatControls from './ChatControls.svelte';
 	import EventConfirmDialog from '../common/ConfirmDialog.svelte';
+	import ArtifactsModal from '$lib/components/chat/ArtifactsModal.svelte';
 
 	const i18n: Writable<i18nType> = getContext('i18n');
 
@@ -1853,6 +1854,8 @@
 			</div>
 		</div>
 	</div>
+
+	<ArtifactsModal />
 {/if}
 
 <ChatControls

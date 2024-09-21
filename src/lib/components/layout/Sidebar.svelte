@@ -14,7 +14,8 @@
 		pinnedChats,
 		scrollPaginationEnabled,
 		currentChatPage,
-		temporaryChatEnabled
+    		temporaryChatEnabled,
+		showArtifacts,
 	} from '$lib/stores';
 	import { onMount, getContext, tick } from 'svelte';
 
@@ -563,9 +564,45 @@
 
 		<div class="px-2.5 pb-safe-bottom">
 			<!-- <hr class=" border-gray-900 mb-1 w-full" /> -->
-
+				 
 			<div class="flex flex-col font-primary">
+				<!-- <hr class=" border-gray-900 mb-1 w-full" /> -->
+				 
 				{#if $user !== undefined}
+					<!-- Artifacts button -->
+					<button
+						class="flex rounded-xl py-3 px-3.5 w-full hover:bg-gray-100 dark:hover:bg-gray-900 transition mb-2"
+						on:click={() => showArtifacts.set(true)}
+					>
+						<div class="self-center mr-3">
+							<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+								<defs>
+								  <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+									<stop offset="0%" style="stop-color:#4A90E2;stop-opacity:1" />
+									<stop offset="100%" style="stop-color:#9B59B6;stop-opacity:1" />
+								  </linearGradient>
+								</defs>
+								
+								<!-- Background circle -->
+								<circle cx="16" cy="16" r="15" fill="url(#iconGradient)" />
+								
+								<!-- Simplified "A" for Artifacts -->
+								<path d="M11 24 L16 8 L21 24 M13 18 H19" stroke="white" stroke-width="2" fill="none" />
+								
+								<!-- Simplified code brackets -->
+								<path d="M7 12 L4 16 L7 20" stroke="white" stroke-width="2" fill="none" />
+								<path d="M25 12 L28 16 L25 20" stroke="white" stroke-width="2" fill="none" />
+								
+								<!-- Small pulsing dot for live rendering -->
+								<circle cx="16" cy="16" r="2" fill="white">
+								  <animate attributeName="r" values="2;3;2" dur="2s" repeatCount="indefinite" />
+								  <animate attributeName="opacity" values="1;0.5;1" dur="2s" repeatCount="indefinite" />
+								</circle>
+							</svg>
+						</div>
+						<div class="self-center font-medium">{$i18n.t('Artifacts')}</div>
+					</button>
+		
 					<UserMenu
 						role={$user.role}
 						on:show={(e) => {
@@ -574,6 +611,7 @@
 							}
 						}}
 					>
+						<!-- Existing user menu button -->
 						<button
 							class=" flex rounded-xl py-3 px-3.5 w-full hover:bg-gray-100 dark:hover:bg-gray-900 transition"
 							on:click={() => {
