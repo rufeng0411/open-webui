@@ -60,7 +60,7 @@ from open_webui.config import (
     RAG_EMBEDDING_MODEL,
     RAG_EMBEDDING_MODEL_AUTO_UPDATE,
     RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE,
-    RAG_EMBEDDING_OPENAI_BATCH_SIZE,
+    RAG_EMBEDDING_BATCH_SIZE,
     RAG_FILE_MAX_COUNT,
     RAG_FILE_MAX_SIZE,
     RAG_OPENAI_API_BASE_URL,
@@ -146,7 +146,7 @@ app.state.config.CHUNK_OVERLAP = CHUNK_OVERLAP
 
 app.state.config.RAG_EMBEDDING_ENGINE = RAG_EMBEDDING_ENGINE
 app.state.config.RAG_EMBEDDING_MODEL = RAG_EMBEDDING_MODEL
-app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE = RAG_EMBEDDING_OPENAI_BATCH_SIZE
+app.state.config.RAG_EMBEDDING_BATCH_SIZE = RAG_EMBEDDING_BATCH_SIZE
 app.state.config.RAG_RERANKING_MODEL = RAG_RERANKING_MODEL
 app.state.config.RAG_TEMPLATE = RAG_TEMPLATE
 
@@ -319,7 +319,7 @@ app.state.EMBEDDING_FUNCTION = get_embedding_function(
     app.state.sentence_transformer_ef,
     app.state.config.OPENAI_API_KEY,
     app.state.config.OPENAI_API_BASE_URL,
-    app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
+    app.state.config.RAG_EMBEDDING_BATCH_SIZE,
 )
 
 app.add_middleware(
@@ -353,7 +353,7 @@ async def get_status():
         "embedding_engine": app.state.config.RAG_EMBEDDING_ENGINE,
         "embedding_model": app.state.config.RAG_EMBEDDING_MODEL,
         "reranking_model": app.state.config.RAG_RERANKING_MODEL,
-        "openai_batch_size": app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
+        "embedding_batch_size": app.state.config.RAG_EMBEDDING_BATCH_SIZE,
     }
 
 
@@ -363,10 +363,10 @@ async def get_embedding_config(user=Depends(get_admin_user)):
         "status": True,
         "embedding_engine": app.state.config.RAG_EMBEDDING_ENGINE,
         "embedding_model": app.state.config.RAG_EMBEDDING_MODEL,
+        "embedding_batch_size": app.state.config.RAG_EMBEDDING_BATCH_SIZE,
         "openai_config": {
             "url": app.state.config.OPENAI_API_BASE_URL,
             "key": app.state.config.OPENAI_API_KEY,
-            "batch_size": app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
         },
     }
 
@@ -382,13 +382,13 @@ async def get_reraanking_config(user=Depends(get_admin_user)):
 class OpenAIConfigForm(BaseModel):
     url: str
     key: str
-    batch_size: Optional[int] = None
 
 
 class EmbeddingModelUpdateForm(BaseModel):
     openai_config: Optional[OpenAIConfigForm] = None
     embedding_engine: str
     embedding_model: str
+    embedding_batch_size: Optional[int] = 1
 
 
 @app.post("/embedding/update")
@@ -406,11 +406,7 @@ async def update_embedding_config(
             if form_data.openai_config is not None:
                 app.state.config.OPENAI_API_BASE_URL = form_data.openai_config.url
                 app.state.config.OPENAI_API_KEY = form_data.openai_config.key
-                app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE = (
-                    form_data.openai_config.batch_size
-                    if form_data.openai_config.batch_size
-                    else 1
-                )
+            app.state.config.RAG_EMBEDDING_BATCH_SIZE = form_data.embedding_batch_size
 
         update_embedding_model(app.state.config.RAG_EMBEDDING_MODEL)
 
@@ -420,17 +416,17 @@ async def update_embedding_config(
             app.state.sentence_transformer_ef,
             app.state.config.OPENAI_API_KEY,
             app.state.config.OPENAI_API_BASE_URL,
-            app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
+            app.state.config.RAG_EMBEDDING_BATCH_SIZE,
         )
 
         return {
             "status": True,
             "embedding_engine": app.state.config.RAG_EMBEDDING_ENGINE,
             "embedding_model": app.state.config.RAG_EMBEDDING_MODEL,
+            "embedding_batch_size": app.state.config.RAG_EMBEDDING_BATCH_SIZE,
             "openai_config": {
                 "url": app.state.config.OPENAI_API_BASE_URL,
                 "key": app.state.config.OPENAI_API_KEY,
-                "batch_size": app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
             },
         }
     except Exception as e:
@@ -738,6 +734,7 @@ def query_doc_handler(
                 query=form_data.query,
                 embedding_function=app.state.EMBEDDING_FUNCTION,
                 k=form_data.k if form_data.k else app.state.config.TOP_K,
+                embeddings={},
             )
     except Exception as e:
         log.exception(e)
@@ -1109,7 +1106,7 @@ def store_docs_in_vector_db(
                 app.state.sentence_transformer_ef,
                 app.state.config.OPENAI_API_KEY,
                 app.state.config.OPENAI_API_BASE_URL,
-                app.state.config.RAG_EMBEDDING_OPENAI_BATCH_SIZE,
+                app.state.config.RAG_EMBEDDING_BATCH_SIZE,
             )
 
             embedding_texts = embedding_function(
