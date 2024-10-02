@@ -5,7 +5,7 @@ from typing import Optional
 from open_webui.apps.webui.internal.db import Base, JSONField, get_db
 from open_webui.env import SRC_LOG_LEVELS
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import BigInteger, Column, String, Text
+from sqlalchemy import BigInteger, Column, String, Text, JSON
 
 log = logging.getLogger(__name__)
 log.setLevel(SRC_LOG_LEVELS["MODELS"])
@@ -20,19 +20,29 @@ class File(Base):
 
     id = Column(String, primary_key=True)
     user_id = Column(String)
+    hash = Column(String)
+
     filename = Column(Text)
+    data = Column(JSON)
     meta = Column(JSONField)
+
     created_at = Column(BigInteger)
+    updated_at = Column(BigInteger)
 
 
 class FileModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     user_id: str
-    filename: str
-    meta: dict
-    created_at: int  # timestamp in epoch
+    hash: str
 
-    model_config = ConfigDict(from_attributes=True)
+    filename: str
+    data: dict
+    meta: dict
+
+    created_at: int  # timestamp in epoch
+    updated_at: int  # timestamp in epoch
 
 
 ####################
@@ -43,9 +53,14 @@ class FileModel(BaseModel):
 class FileModelResponse(BaseModel):
     id: str
     user_id: str
+    hash: str
+
     filename: str
+    data: dict
     meta: dict
+
     created_at: int  # timestamp in epoch
+    updated_at: int  # timestamp in epoch
 
 
 class FileForm(BaseModel):
@@ -62,6 +77,7 @@ class FilesTable:
                     **form_data.model_dump(),
                     "user_id": user_id,
                     "created_at": int(time.time()),
+                    "updated_at": int(time.time()),
                 }
             )
 
@@ -96,6 +112,17 @@ class FilesTable:
                 FileModel.model_validate(file)
                 for file in db.query(File).filter_by(user_id=user_id).all()
             ]
+
+    def update_files_data_by_id(self, id: str, data: dict) -> Optional[FileModel]:
+        with get_db() as db:
+            try:
+                file = db.query(File).filter_by(id=id).first()
+                file.data = {**file.data, **data}
+                db.commit()
+
+                return FileModel.model_validate(file)
+            except Exception:
+                return None
 
     def update_files_metadata_by_id(self, id: str, meta: dict) -> Optional[FileModel]:
         with get_db() as db:
