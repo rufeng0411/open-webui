@@ -35,6 +35,8 @@
 					{#each chatFiles as file, fileIdx}
 						<FileItem
 							className="w-full"
+							{file}
+							edit={true}
 							url={`${file?.url}`}
 							name={file.name}
 							type={file.type}
@@ -45,6 +47,9 @@
 
 								chatFiles.splice(fileIdx, 1);
 								chatFiles = chatFiles;
+							}}
+							on:click={() => {
+								console.log(file);
 							}}
 						/>
 					{/each}

@@ -17,7 +17,8 @@
 	import { blobToFile, findWordIndices } from '$lib/utils';
 
 	import { transcribeAudio } from '$lib/apis/audio';
-	import { processDocToVectorDB } from '$lib/apis/rag';
+
+	import { processFile } from '$lib/apis/retrieval';
 	import { uploadFile } from '$lib/apis/files';
 
 	import {
@@ -132,21 +133,8 @@
 				fileItem.id = uploadedFile.id;
 				fileItem.url = `${WEBUI_API_BASE_URL}/files/${uploadedFile.id}`;
 
-				// TODO: Check if tools & functions have files support to skip this step to delegate file processing
-				// Default Upload to VectorDB
-				if (
-					SUPPORTED_FILE_TYPE.includes(file['type']) ||
-					SUPPORTED_FILE_EXTENSIONS.includes(file.name.split('.').at(-1))
-				) {
-					processFileItem(fileItem);
-				} else {
-					toast.error(
-						$i18n.t(`Unknown file type '{{file_type}}'. Proceeding with the file upload anyway.`, {
-							file_type: file['type']
-						})
-					);
-					processFileItem(fileItem);
-				}
+				// Try to extract content of the file for retrieval, even non-supported file types
+				processFileItem(fileItem);
 			} else {
 				files = files.filter((item) => item.status !== null);
 			}
@@ -158,17 +146,19 @@
 
 	const processFileItem = async (fileItem) => {
 		try {
-			const res = await processDocToVectorDB(localStorage.token, fileItem.id);
-
+			const res = await processFile(localStorage.token, fileItem.id);
 			if (res) {
 				fileItem.status = 'processed';
 				fileItem.collection_name = res.collection_name;
+				fileItem.file = {
+					...fileItem.file,
+					content: res.content
+				};
+
 				files = files;
 			}
 		} catch (e) {
-			// Remove the failed doc from the files array
-			// files = files.filter((f) => f.id !== fileItem.id);
-			toast.error(e);
+			// We keep the file in the files list even if it fails to process
 			fileItem.status = 'processed';
 			files = files;
 		}
@@ -466,14 +456,19 @@
 											</div>
 										{:else}
 											<FileItem
+												{file}
 												name={file.name}
 												type={file.type}
 												size={file?.size}
 												status={file.status}
 												dismissible={true}
+												edit={true}
 												on:dismiss={() => {
 													files.splice(fileIdx, 1);
 													files = files;
+												}}
+												on:click={() => {
+													console.log(file);
 												}}
 											/>
 										{/if}

@@ -8,6 +8,8 @@
 	import MarkdownInlineTokens from '$lib/components/chat/Messages/Markdown/MarkdownInlineTokens.svelte';
 	import KatexRenderer from './KatexRenderer.svelte';
 	import { WEBUI_BASE_URL } from '$lib/constants';
+	import { stringify } from 'postcss';
+	import Collapsible from '$lib/components/common/Collapsible.svelte';
 
 	export let id: string;
 	export let tokens: Token[];
@@ -94,6 +96,12 @@
 				{/each}
 			</ul>
 		{/if}
+	{:else if token.type === 'details'}
+		<Collapsible title={token.summary} className="w-fit space-y-1">
+			<div class=" mb-1.5" slot="content">
+				<svelte:self id={`${id}-${tokenIdx}-d`} tokens={marked.lexer(token.text)} />
+			</div>
+		</Collapsible>
 	{:else if token.type === 'html'}
 		{@const html = DOMPurify.sanitize(token.text)}
 		{#if html && html.includes('<video')}
